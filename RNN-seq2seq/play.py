@@ -1,38 +1,17 @@
 import random
 import torch
-import torch.nn as nn
 import numpy as np
 from model import Encoder, Decoder, Seq2Seq
 
-from utils import NumeralsDataset, generate_dataset
+from utils import NumeralsDataset, generate_dataset, load_configurations
 from utils import SRC, TRG
 from torchtext.legacy.data import BucketIterator
 
-
-# set the random seeds for deterministic results
-SEED = 1234
-
-random.seed(SEED)
-np.random.seed(SEED)
-torch.manual_seed(SEED)
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BATCH_SIZE = 1
-
-INPUT_DIM = 14  # 10 digits + <, >, _ and ?
-OUTPUT_DIM = 11  # 7 digits + <, >, _ and ?
-ENC_EMB_DIM = 64
-DEC_EMB_DIM = 64
-HID_DIM = 256
-N_LAYERS = 2
-ENC_DROPOUT = 0.1
-DEC_DROPOUT = 0.1
+from argparse import ArgumentParser
 
 
-def evaluate(model, iterator, criterion):
+def play(model, iterator):
     model.eval()
-    
-    epoch_loss = 0
     
     with torch.no_grad():
         for i, batch in enumerate(iterator):
@@ -65,24 +44,45 @@ def evaluate(model, iterator, criterion):
             # print(output.argmax(1))
             pred_numeral = "".join([TRG.vocab.itos[idx] for idx in output.argmax(1)])
             print("predicted_numeral", pred_numeral)
+            print("\n")
             
-            loss = criterion(output, trg)
-            
-            epoch_loss += loss.item()
-            
-            print("\n\n")
-    
-    return epoch_loss / len(iterator)
-
 
 if __name__=="__main__":
+    arg_parser = ArgumentParser(description='.')
+    arg_parser.add_argument('--config', type=str, required=True, default="config.yml")
+    arg_parser.add_argument('--model', type=str, required=True)
+    args = arg_parser.parse_args()
+
+    config = load_configurations(args.config)
+    model_path = args.model
+
+    SEED = config["SEED"]
+
+    INPUT_DIM = config["INPUT_DIM"]
+    OUTPUT_DIM = config["OUTPUT_DIM"]
+    ENC_EMB_DIM = config["ENC_EMB_DIM"]
+    DEC_EMB_DIM = config["DEC_EMB_DIM"]
+    HID_DIM = config["HID_DIM"]
+    N_LAYERS = config["N_LAYERS"]
+    ENC_DROPOUT = config["ENC_DROPOUT"]
+    DEC_DROPOUT = config["ENC_DROPOUT"]
+
+    # in the play setting we run 1 example at a time to be able to visualize it more easily
+    BATCH_SIZE = 1
+
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
     enc = Encoder(INPUT_DIM, ENC_EMB_DIM, HID_DIM, N_LAYERS, ENC_DROPOUT)
     dec = Decoder(OUTPUT_DIM, DEC_EMB_DIM, HID_DIM, N_LAYERS, DEC_DROPOUT)
     
     model = Seq2Seq(enc, dec, device).to(device)
-    
-    model.load_state_dict(torch.load('models/numeral-conversion-model-sort_by_src_all-batch_32-epochs_40-dropout_0.5.pt'))
+    model.load_state_dict(torch.load(model_path))
 
+    # Get the dataset. The predefined random SEED ensures we get the same split
     numeral_examples = generate_dataset()
     numerals_dataset = NumeralsDataset(numeral_examples)
 
@@ -107,6 +107,5 @@ if __name__=="__main__":
                                                           sort_within_batch=True
                                                           )
     
-    criterion = nn.CrossEntropyLoss(ignore_index=TRG_PAD_IDX)
-    evaluate(model, test_iterator, criterion)
-    
+    play(model, test_iterator)
+

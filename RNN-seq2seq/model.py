@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 
-# from torchtext.legacy.datasets import Multi30k
-# import spacy
-
 import random
 
 START_TOKEN = "<"
@@ -13,7 +10,17 @@ UNK_TOKEN = "?"
 
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim=13, emb_dim=13, hid_dim=64, n_layers=2, dropout=0.1):
+    """
+    The Encoder Module
+    """
+    def __init__(self, input_dim=14, emb_dim=64, hid_dim=256, n_layers=2, dropout=0.1):
+        """
+        :param input_dim: size of the input vocabulary (default 10 digits + 4 extra tokens)
+        :param emb_dim: size of the embedding of digits and extra tokens
+        :param hid_dim: size of the hidden dimension for the LSTM cell
+        :param n_layers: number of LSTM cells
+        :param dropout: probability of dropout
+        """
         super().__init__()
         
         self.hid_dim = hid_dim
@@ -27,24 +34,30 @@ class Encoder(nn.Module):
     
     def forward(self, src):
         # src = [src len, batch size]
-        
         embedded = self.dropout(self.embedding(src))
 
         # embedded = [src len, batch size, emb dim]
-        
-        outputs, (hidden, cell) = self.rnn(embedded)
-
         # outputs = [src len, batch size, hid dim * n directions]
         # hidden = [n layers * n directions, batch size, hid dim]
         # cell = [n layers * n directions, batch size, hid dim]
+        outputs, (hidden, cell) = self.rnn(embedded)
 
         # outputs are always from the top hidden layer
-        
         return hidden, cell
 
 
 class Decoder(nn.Module):
-    def __init__(self, output_dim=10, emb_dim=10, hid_dim=64, n_layers=2, dropout=0.1):
+    """
+    The Decoder Module
+    """
+    def __init__(self, output_dim=10, emb_dim=64, hid_dim=256, n_layers=2, dropout=0.1):
+        """
+        :param output_dim: size of the output vocabulary (default 7 elements + 4 extra tokens)
+        :param emb_dim: size of the embedding of roman number representations and extra tokens
+        :param hid_dim: size of the hidden dimension for the LSTM cell
+        :param n_layers: number of LSTM cells
+        :param dropout: probability of dropout
+        """
         super().__init__()
         
         self.output_dim = output_dim
@@ -67,34 +80,32 @@ class Decoder(nn.Module):
         # n directions in the decoder will both always be 1, therefore:
         # hidden = [n layers, batch size, hid dim]
         # context = [n layers, batch size, hid dim]
-        
-        input = input.unsqueeze(0)
 
         # input = [1, batch size]
-        
-        embedded = self.dropout(self.embedding(input))
+        input = input.unsqueeze(0)
 
         # embedded = [1, batch size, emb dim]
-        
-        output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
+        embedded = self.dropout(self.embedding(input))
 
         # output = [seq len, batch size, hid dim * n directions]
         # hidden = [n layers * n directions, batch size, hid dim]
         # cell = [n layers * n directions, batch size, hid dim]
-
         # seq len and n directions will always be 1 in the decoder, therefore:
-        # output = [1, batch size, hid dim]
-        # hidden = [n layers, batch size, hid dim]
-        # cell = [n layers, batch size, hid dim]
-        
-        prediction = self.fc_out(output.squeeze(0))
+        #   output = [1, batch size, hid dim]
+        #   hidden = [n layers, batch size, hid dim]
+        #   cell = [n layers, batch size, hid dim]
+        output, (hidden, cell) = self.rnn(embedded, (hidden, cell))
 
         # prediction = [batch size, output dim]
-        
+        prediction = self.fc_out(output.squeeze(0))
+
         return prediction, hidden, cell
 
 
 class Seq2Seq(nn.Module):
+    """
+    Sequence to Sequence model combining the encoder and decoder
+    """
     def __init__(self, encoder, decoder, device):
         super().__init__()
         
@@ -112,7 +123,6 @@ class Seq2Seq(nn.Module):
         # trg = [trg len, batch size]
         # teacher_forcing_ratio is probability to use teacher forcing
         # e.g. if teacher_forcing_ratio is 0.75 we use ground-truth inputs 75% of the time
-        
         batch_size = trg.shape[1]
         trg_len = trg.shape[0]
         trg_vocab_size = self.decoder.output_dim
