@@ -91,7 +91,11 @@ class Decoder(nn.Module):
         #   n directions in the decoder will both always be 1, therefore:
         #       hidden = [n layers, batch size, hid dim]
         #       context = [n layers, batch size, hid dim]
-        #       input = [1, batch size]
+        
+        # We introduce a "sequence" dimension to our input to make it similar to how the encoder was run
+        # Since we only pass 1 token at a time, our sequence length will always be 1.
+        # The shape of the input becomes:
+        #   input = [1, batch size]
         input = input.unsqueeze(0)
 
         # embedded shape = [1, batch size, emb dim]
